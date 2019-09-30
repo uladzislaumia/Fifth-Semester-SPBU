@@ -1,0 +1,38 @@
+1
+1 * # @ $
+@ $
+start
+prime
+
+start @ start @ right
+start 1 length_is_1+ 1 right
+length_is_1+ $ not_prime $ left
+length_is_1+ 1 length_is_2+ * right
+length_is_2+ $ prime $ left
+length_is_2+ 1 move_to_left # left
+
+move_to_left * move_to_left * left
+move_to_left # move_to_left # left
+move_to_left 1 move_to_right * right
+move_to_left @ move_to_right_and_check @ right
+
+move_to_right * move_to_right * right
+move_to_right # move_to_right # right
+move_to_right 1 move_to_left * left
+move_to_right $ inc_div_and_check $ left
+
+inc_div_and_check * inc_div_and_check 1 left
+inc_div_and_check # inc_div_and_check2 * left
+inc_div_and_check2 1 inc_div_and_check2 1 left
+inc_div_and_check2 * inc_div_and_check2 1 left
+inc_div_and_check2 @ inc_div_and_check3 @ right
+inc_div_and_check3 1 inc_div_and_check3 1 right
+inc_div_and_check3 * inc_div_and_check4 * right
+inc_div_and_check4 1 move_to_left # left
+inc_div_and_check4 $ prime $ left
+
+move_to_right_and_check * move_to_right_and_check 1 right
+move_to_right_and_check # move_to_right_and_check2 # right
+move_to_right_and_check2 * move_to_right_and_check2 * right
+move_to_right_and_check2 $ not_prime $ left
+move_to_right_and_check2 1 move_to_left 1 left
