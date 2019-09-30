@@ -1,6 +1,6 @@
 import java.lang.Math.abs
 
-class Interpreter() {
+class Interpreter {
 
     private val rightTapePart = mutableListOf<String>()
     private val leftTapePart = mutableListOf<String>()

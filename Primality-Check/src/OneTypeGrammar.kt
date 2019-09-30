@@ -1,77 +1,20 @@
-import java.io.File
-import java.io.PrintWriter
-import java.util.regex.Pattern
-
 class OneTypeGrammar(
-        private val sigma: Set<String>,
-        private val genProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
-        private val transProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
-        private val delProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
+        _sigma: Set<String>,
+        _genProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
+        _transProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
+        _delProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
         private val machine: LinearBoundedAutomaton
-) {
-    private var productionNumber: Int = 0
+) : Grammar(_sigma, _genProductions, _transProductions, _delProductions) {
 
-    init {
-        for (entry in genProductions.entries) productionNumber += entry.value.size
-        for (entry in transProductions.entries) productionNumber += entry.value.size
-        for (entry in delProductions.entries) productionNumber += entry.value.size
-    }
-
-    fun printMainInfo() {
+    override fun printMainInfo() {
         println("* * * One-type grammar * * *")
-        println("Sigma size: ${sigma.size}")
-        println("Total productions: $productionNumber")
-        println()
-    }
-
-    fun saveToFile(fileName: String) {
-        val writer = PrintWriter(File(fileName))
-        for (productions in genProductions.entries) {
-            val leftPart = productions.key
-            for (rightPart in productions.value) {
-                writer.println("${leftPart.joinToString("")} -> ${rightPart.joinToString("")}")
-            }
-        }
-        for (productions in transProductions.entries) {
-            val leftPart = productions.key
-            for (rightPart in productions.value) {
-                writer.println("${leftPart.joinToString("")} -> ${rightPart.joinToString("")}")
-            }
-        }
-        for (productions in delProductions.entries) {
-            val leftPart = productions.key
-            for (rightPart in productions.value) {
-                writer.println("${leftPart.joinToString("")} -> ${rightPart.joinToString("")}")
-            }
-        }
-        writer.close()
+        super.printMainInfo()
     }
 
     fun checkWordForReachability(word: String) {
+        // Initial configurations
         val output = mutableListOf<String>()
         val currentChain = mutableListOf<LexicalElement>()
-
-        fun nextStep(leftPart: List<LexicalElement>, rightPart: List<LexicalElement>): Boolean {
-            val searchResults = mutableListOf(currentChain.withIndex().filter { it.value == leftPart[0] && it.index + leftPart.size - 1 < currentChain.size }.map { it.index })
-            for (i in 1 until leftPart.size) {
-                val currentSearchResult = searchResults[i - 1].filter { startIndex -> currentChain[startIndex + i] == leftPart[i] }
-                if (currentSearchResult.isEmpty()) break
-                searchResults.add(currentSearchResult)
-            }
-
-            return if (searchResults.size == leftPart.size && searchResults.last().isNotEmpty()) {
-                val startIndex = searchResults.last()[0]
-                for (i in 0 until leftPart.size) {
-                    currentChain.removeAt(startIndex)
-                }
-                currentChain.addAll(startIndex, rightPart)
-                output.add("${leftPart.joinToString("")} -> ${rightPart.joinToString("")}")
-//                println(currentChain.joinToString("") + "     " + output.last())
-                true
-            } else false
-        }
-
-        // Initial configurations
         val isSingleSymbolWord = word.length == 3
         val a1 = LexicalElement.NonTerminal("A1")
         val a2 = LexicalElement.NonTerminal("A2")
@@ -79,12 +22,12 @@ class OneTypeGrammar(
         currentChain.add(a1)
 
         if (isSingleSymbolWord) {
-            nextStep(listOf(a1), genProductions[listOf(a1)]!!.find { it.size == 1 && it[0].data.contains("1") }!!)
+            nextStep(currentChain, output, listOf(a1), genProductions[listOf(a1)]!!.find { it.size == 1 && it[0].data.contains("1") }!!)
         } else {
-            nextStep(listOf(a1), genProductions[listOf(a1)]!!.find { it.size == 2 && it[0].data.contains("1") }!!)
+            nextStep(currentChain, output, listOf(a1), genProductions[listOf(a1)]!!.find { it.size == 2 && it[0].data.contains("1") }!!)
             val prod = genProductions[listOf(a2)]!!.find { it.size == 2 && it[0].data.contains("1") }!!
-            for (i in 0 until word.length - 4) nextStep(listOf(a2), prod)
-            nextStep(listOf(a2), genProductions[listOf(a2)]!!.find { it.size == 1 && it[0].data.contains("1") }!!)
+            for (i in 0 until word.length - 4) nextStep(currentChain, output, listOf(a2), prod)
+            nextStep(currentChain, output, listOf(a2), genProductions[listOf(a2)]!!.find { it.size == 1 && it[0].data.contains("1") }!!)
         }
 
         // Transition configurations
@@ -94,14 +37,14 @@ class OneTypeGrammar(
             var leftPart = listOf(currentLexicalElement)
             var rightPart = transProductions[leftPart]?.first()
             if (rightPart != null) {
-                if (nextStep(leftPart, rightPart)) continue
+                if (nextStep(currentChain, output, leftPart, rightPart)) continue
             }
 
             if (currentPosition < currentChain.size - 1) {
                 leftPart = listOf(currentLexicalElement, currentChain[currentPosition + 1])
                 rightPart = transProductions[leftPart]?.first()
                 if (rightPart != null) {
-                    if (nextStep(leftPart, rightPart)) {
+                    if (nextStep(currentChain, output, leftPart, rightPart)) {
                         currentPosition++
                         continue
                     }
@@ -112,7 +55,7 @@ class OneTypeGrammar(
                 leftPart = listOf(currentChain[currentPosition - 1], currentLexicalElement)
                 rightPart = transProductions[leftPart]?.first()
                 if (rightPart != null) {
-                    if (nextStep(leftPart, rightPart)) {
+                    if (nextStep(currentChain, output, leftPart, rightPart)) {
                         currentPosition--
                         continue
                     }
@@ -130,14 +73,14 @@ class OneTypeGrammar(
         // Recovery configurations
         var leftPart = listOf(currentChain[currentPosition])
         var rightPart = delProductions[leftPart]?.first()
-        nextStep(leftPart, rightPart!!)
+        nextStep(currentChain, output, leftPart, rightPart!!)
 
         var i = currentPosition
         while (i < currentChain.size - 1) {
             leftPart = listOf(currentChain[i], currentChain[i + 1])
             rightPart = delProductions[leftPart]?.first()
             rightPart?.let {
-                nextStep(leftPart, it)
+                nextStep(currentChain, output, leftPart, it)
             }
             i++
         }
@@ -147,7 +90,7 @@ class OneTypeGrammar(
             leftPart = listOf(currentChain[i], currentChain[i + 1])
             rightPart = delProductions[leftPart]?.first()
             rightPart?.let {
-                nextStep(leftPart, it)
+                nextStep(currentChain, output, leftPart, it)
             }
             i--
         }
@@ -160,7 +103,7 @@ class OneTypeGrammar(
 
     companion object {
 
-        fun createFromLBA(machine: LinearBoundedAutomaton): OneTypeGrammar {
+        fun getInstance(machine: LinearBoundedAutomaton): OneTypeGrammar {
             // Production stages
             val genProductions = mutableMapOf<List<LexicalElement>, MutableSet<List<LexicalElement>>>()
             val transProductions = mutableMapOf<List<LexicalElement>, MutableSet<List<LexicalElement>>>()
@@ -426,15 +369,6 @@ class OneTypeGrammar(
                 }
             }
             return OneTypeGrammar(machine.sigma, genProductions, transProductions, delProductions, machine)
-        }
-
-        private fun addProductionIntoGrammar(grammar: MutableMap<List<LexicalElement>, MutableSet<List<LexicalElement>>>, leftPart: List<LexicalElement>, rightPart: List<LexicalElement>) {
-            val productions = grammar[leftPart]
-            if (productions == null) {
-                grammar[leftPart] = mutableSetOf(rightPart)
-            } else {
-                productions.add(rightPart)
-            }
         }
     }
 }

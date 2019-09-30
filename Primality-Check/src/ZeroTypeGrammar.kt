@@ -1,215 +1,216 @@
-import java.io.File
-import java.io.PrintWriter
-import java.util.regex.Pattern
-
 class ZeroTypeGrammar(
-        private val sigma: Set<String>,
-        private val genProductions: Map<String, List<List<String>>>,
-        private val transProductions: Map<String, List<List<String>>>,
-        private val delProductions: Map<String, List<List<String>>>,
+        _sigma: Set<String>,
+        _genProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
+        _transProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
+        _delProductions: Map<List<LexicalElement>, Set<List<LexicalElement>>>,
         private val machine: TuringMachine
-) {
-    private var productionNumber: Int = 0
+) : Grammar(_sigma, _genProductions, _transProductions, _delProductions) {
 
-    init {
-        for (entry in genProductions.entries) productionNumber += entry.value.size
-        for (entry in transProductions.entries) productionNumber += entry.value.size
-        for (entry in delProductions.entries) productionNumber += entry.value.size
-    }
-
-    fun printMainInfo() {
+    override fun printMainInfo() {
         println("* * * Zero-type grammar * * *")
-        println("Sigma size: ${sigma.size}")
-        println("Total productions: $productionNumber")
-        println()
+        super.printMainInfo()
     }
 
-    fun saveToFile(fileName: String) {
-        val writer = PrintWriter(File(fileName))
-        for (productions in genProductions.entries) {
-            val leftPart = productions.key
-            for (rightPart in productions.value) {
-                writer.println("$leftPart -> ${rightPart.joinToString("")}")
-            }
-        }
-        for (productions in transProductions.entries) {
-            val leftPart = productions.key
-            for (rightPart in productions.value) {
-                writer.println("$leftPart -> ${rightPart.joinToString("")}")
-            }
-        }
-        for (productions in delProductions.entries) {
-            val leftPart = productions.key
-            for (rightPart in productions.value) {
-                writer.println("$leftPart -> ${rightPart.joinToString("")}")
-            }
-        }
-        writer.close()
-    }
-
-    fun checkWordReachability(word: String) {
+    fun checkWordForReachability(word: String) {
+        // Initial configurations
         val output = mutableListOf<String>()
-        val currentChain = mutableListOf("A0")
+        val currentChain = mutableListOf<LexicalElement>()
+        val a0 = LexicalElement.NonTerminal("A0")
+        val a1 = LexicalElement.NonTerminal("A1")
+        val a2 = LexicalElement.NonTerminal("A2")
+        val a3 = LexicalElement.NonTerminal("A3")
+        currentChain.add(a0)
+        nextStep(currentChain, output, listOf(a0), genProductions[listOf(a0)]!!.find { it.size == 2 }!!)
+        nextStep(currentChain, output, listOf(a0), genProductions[listOf(a0)]!!.find { it.size == 1 }!!)
+        nextStep(currentChain, output, listOf(a1), genProductions[listOf(a1)]!!.first())
+        for (i in 0 until word.length) nextStep(currentChain, output, listOf(a2), genProductions[listOf(a2)]!!.find { it.size == 2 && it[0].data.contains("1") }!!)
+        nextStep(currentChain, output, listOf(a2), genProductions[listOf(a2)]!!.find { it.size == 1 }!!)
+        for (i in 0 until word.length + 2) nextStep(currentChain, output, listOf(a3), genProductions[listOf(a3)]!!.find { it.size == 2 }!!)
+        nextStep(currentChain, output, listOf(a3), genProductions[listOf(a3)]!!.find { it.size == 1 }!!)
 
-        fun nextStep(leftPart: List<String>, rightPart: List<String>): Boolean {
-            val searchResults = mutableListOf<List<Int>>()
-            val primarySearchResult = currentChain.withIndex().filter { it.value == leftPart[0] && it.index + leftPart.size - 1 < currentChain.size }.map { it.index }
-            searchResults.add(primarySearchResult)
-            for (i in 1 until leftPart.size) {
-                val currentSearchResult = searchResults[i - 1].filter { startIndex -> currentChain[startIndex + i] == leftPart[i] }
-                if (currentSearchResult.isEmpty()) break
-                searchResults.add(currentSearchResult)
-            }
-
-            return if (searchResults.size == leftPart.size && searchResults.last().isNotEmpty()) {
-                val startIndex = searchResults.last()[0]
-                for (i in 0 until leftPart.size) {
-                    currentChain.removeAt(startIndex)
+        // Transition configurations
+        var currentPosition = 1
+        while (true) {
+            val currentLexicalElement = currentChain[currentPosition]
+            if (currentPosition < currentChain.size - 1) {
+                var leftPart = listOf(currentLexicalElement, currentChain[currentPosition + 1])
+                var rightPart = transProductions[leftPart]?.first()
+                if (rightPart != null) {
+                    if (nextStep(currentChain, output, leftPart, rightPart)) {
+                        currentPosition++
+                        continue
+                    }
                 }
-                currentChain.addAll(startIndex, rightPart)
-                output.add("${leftPart.joinToString("")} -> ${rightPart.joinToString("")}")
-//                println(currentChain.joinToString(" ") + "     " + output.last())
-                true
-            } else {
-                false
+                if (currentPosition > 0) {
+                    leftPart = listOf(currentChain[currentPosition - 1], currentLexicalElement, currentChain[currentPosition + 1])
+                    rightPart = transProductions[leftPart]?.first()
+                    if (rightPart != null) {
+                        if (nextStep(currentChain, output, leftPart, rightPart)) {
+                            currentPosition--
+                            continue
+                        }
+                    }
+                }
             }
+            break
         }
 
-        // Generation stage
-        nextStep(listOf("A0"), genProductions["A0"]!![0])
-        nextStep(listOf("A0"), genProductions["A0"]!![1])
-        nextStep(listOf("A1"), genProductions["A1"]!![0])
-        for (i in 0 until word.length) nextStep(listOf("A2"), genProductions["A2"]!![0])
-        nextStep(listOf("A2"), genProductions["A2"]!![1])
-        for (i in 0 until word.length + 2) nextStep(listOf("A3"), genProductions["A3"]!![0])
-        nextStep(listOf("A3"), genProductions["A3"]!![1])
-
-        // MT working stage
-        var currentStatePosition = 1
-        while (currentChain[currentStatePosition] !in machine.finalStates) {
-            val currentNonTerminal = currentChain[currentStatePosition]
-            val nextNonTerminal = currentChain[currentStatePosition + 1]
-            transProductions[currentNonTerminal + nextNonTerminal]?.let {
-                nextStep(listOf(currentNonTerminal, nextNonTerminal), it[0])
-                currentStatePosition++
-            } ?: transProductions[currentChain[currentStatePosition - 1] + currentNonTerminal + nextNonTerminal]?.let {
-                nextStep(listOf(currentChain[currentStatePosition - 1], currentNonTerminal, nextNonTerminal), it[0])
-                currentStatePosition--
-            } ?: break
-        }
-        val terminationState = currentChain[currentStatePosition]
-        if (terminationState !in machine.finalStates) {
-            println("Word $word is not reachable in this grammar.")
+        val terminationStateTerminal = currentChain[currentPosition]
+        if ((terminationStateTerminal.data.find { it in machine.states }) !in machine.finalStates) {
+            println("Word $word (${word.length}) is not reachable in this grammar.")
             println()
             return
         }
 
-        // Deletion stage
-        var currentPosition = currentStatePosition + 1
-        val pattern = Pattern.compile("[(](.*),.*[)]")
-
-        while (true) {
-            val currentNonTerminal = currentChain[currentPosition]
-            val matcher = pattern.matcher(currentNonTerminal)
-            if (matcher.find()) {
-                val value = matcher.group(1)
-                nextStep(listOf(terminationState, currentNonTerminal), listOf(terminationState, value, terminationState))
-                currentPosition++
+        // Recovery configurations
+        var i = currentPosition
+        while (i < currentChain.size - 1) {
+            val leftPart = listOf(terminationStateTerminal, currentChain[i + 1])
+            val rightPart = delProductions[leftPart]?.first()
+            rightPart?.let {
+                nextStep(currentChain, output, leftPart, it)
             }
-            currentPosition++
-            if (currentPosition >= currentChain.size) break
+            i++
         }
 
-        currentPosition = currentStatePosition - 1
-        while (true) {
-            val currentNonTerminal = currentChain[currentPosition]
-            val matcher = pattern.matcher(currentNonTerminal)
-            if (matcher.find()) {
-                val value = matcher.group(1)
-                nextStep(listOf(currentNonTerminal, terminationState), listOf(terminationState, value, terminationState))
+        i = currentPosition - 1
+        while (i >= 0) {
+            val leftPart = listOf(currentChain[i], terminationStateTerminal)
+            val rightPart = delProductions[leftPart]?.first()
+            rightPart?.let {
+                nextStep(currentChain, output, leftPart, it)
             }
-            currentPosition--
-            if (currentPosition < 0) break
+            i--
         }
 
-        while (nextStep(listOf(terminationState), listOf())) { }
-        println("Word $word is reachable in this grammar:")
+        while (nextStep(currentChain, output, listOf(terminationStateTerminal), delProductions[listOf(terminationStateTerminal)]!!.first())) { }
+
+        println("Word $word (${word.length}) is reachable in this grammar:")
         for (s in output) println(s)
+        println("Final chain: ${currentChain.joinToString("")}")
         println()
     }
 
     companion object {
 
-        fun createFromMT(machine: TuringMachine): ZeroTypeGrammar {
+        fun getInstance(machine: TuringMachine): ZeroTypeGrammar {
             // Production stages
-            val genProductions = mutableMapOf<String, MutableList<List<String>>>()
-            val transProductions = mutableMapOf<String, MutableList<List<String>>>()
-            val delProductions = mutableMapOf<String, MutableList<List<String>>>()
+            val genProductions = mutableMapOf<List<LexicalElement>, MutableSet<List<LexicalElement>>>()
+            val transProductions = mutableMapOf<List<LexicalElement>, MutableSet<List<LexicalElement>>>()
+            val delProductions = mutableMapOf<List<LexicalElement>, MutableSet<List<LexicalElement>>>()
             val epsilon = ""
 
-            // A0 -> (epsilon,blank)A0   &&   A0 -> A1
-            addProductionIntoGrammar(genProductions, "A0", listOf("($epsilon,_)", "A0"))
-            addProductionIntoGrammar(genProductions, "A0", listOf("A1"))
+            // Initial configurations
+            val a0 = LexicalElement.NonTerminal("A0")
+            val a1 = LexicalElement.NonTerminal("A1")
+            val a2 = LexicalElement.NonTerminal("A2")
+            val a3 = LexicalElement.NonTerminal("A3")
 
+            // A0 -> (epsilon,blank)A0
+            addProductionIntoGrammar(
+                    genProductions,
+                    listOf(a0),
+                    listOf(LexicalElement.NonTerminal(listOf(epsilon, machine.blank)), a0)
+            )
+            // A0 -> A1
+            addProductionIntoGrammar(
+                    genProductions,
+                    listOf(a0),
+                    listOf(a1)
+            )
             // A1 -> q0A2
-            addProductionIntoGrammar(genProductions, "A1", listOf(machine.startState, "A2"))
+            addProductionIntoGrammar(
+                    genProductions,
+                    listOf(a1),
+                    listOf(LexicalElement.NonTerminal(machine.startState), a2)
+            )
+            // A2 -> (a,a)A2   a: from sigma
+            for (a in machine.sigma)
+                addProductionIntoGrammar(
+                        genProductions,
+                        listOf(a2),
+                        listOf(LexicalElement.NonTerminal(listOf(a, a)), a2)
+                )
+            // A2 -> A3
+            addProductionIntoGrammar(
+                    genProductions,
+                    listOf(a2),
+                    listOf(a3)
+            )
+            // A3 -> (epsilon,blank)A3
+            addProductionIntoGrammar(
+                    genProductions,
+                    listOf(a3),
+                    listOf(LexicalElement.NonTerminal(listOf(epsilon, machine.blank)), a3)
+            )
+            // A3 -> epsilon
+            addProductionIntoGrammar(
+                    genProductions,
+                    listOf(a3),
+                    listOf(LexicalElement.Terminal(epsilon))
+            )
 
-            // A2 -> (a,a)A2   a: from sigma   &&   A2 -> A3
-            for (a in machine.sigma) addProductionIntoGrammar(genProductions, "A2", listOf("($a,$a)", "A2"))
-            addProductionIntoGrammar(genProductions, "A2", listOf("A3"))
+            // Transition configurations
+            for (transition in machine.delta.entries) {
+                val q = transition.key.first
+                val x = transition.key.second
+                val p = transition.value.first
+                val y = transition.value.second
+                val direction = transition.value.third
 
-            // A3 -> (epsilon,blank)A3   &&   A3 -> epsilon
-            addProductionIntoGrammar(genProductions, "A3", listOf("($epsilon,_)", "A3"))
-            addProductionIntoGrammar(genProductions, "A3", listOf(epsilon))
-
-            // q(a,A) -> (a,M)p   q,p: states; A,M: from gamma; a: from sigma or epsilon; where: delta(q,A) = (p,M,R)
-            val transitionsToRight = machine.delta.entries.filter { entry -> entry.value.third == "right" }
-            for (trans in transitionsToRight) {
-                val q = trans.key.first
-                val A = trans.key.second
-                val p = trans.value.first
-                val M = trans.value.second
                 for (a in machine.sigma + epsilon) {
-                    addProductionIntoGrammar(transProductions, "$q($a,$A)", listOf("($a,$M)", p))
-                }
-            }
-
-            // (b,C)q(a,A) -> p(b,C)(a,M)   q,p: states; A,M,C: from gamma; a,b: from sigma or epsilon; where: delta(q,A) = (p,M,L)
-            val transitionsToLeft = machine.delta.entries.filter { entry -> entry.value.third == "left" }
-            for (trans in transitionsToLeft) {
-                val q = trans.key.first
-                val A = trans.key.second
-                val p = trans.value.first
-                val M = trans.value.second
-                for (a in machine.sigma + epsilon) {
-                    for (b in machine.sigma + epsilon) {
-                        for (C in machine.gamma) {
-                            addProductionIntoGrammar(transProductions, "($b,$C)$q($a,$A)", listOf(p, "($b,$C)", "($a,$M)"))
+                    when (direction) {
+                        "right" -> {
+                            // q(a,X) -> (a,Y)p, если delta(q,X) = (p,Y,R), при этом a: from sigma or epsilon;
+                            addProductionIntoGrammar(
+                                    transProductions,
+                                    listOf(LexicalElement.NonTerminal(q), LexicalElement.NonTerminal(listOf(a, x))),
+                                    listOf(LexicalElement.NonTerminal(listOf(a, y)), LexicalElement.NonTerminal(p))
+                            )
+                        }
+                        "left" -> {
+                            // (b,C)q(a,X) -> p(b,C)(a,Y), если delta(q,X) = (p,Y,L), при этом a,b: from sigma or epsilon и C: from gamma
+                            for (b in machine.sigma + epsilon) {
+                                for (c in machine.gamma) {
+                                    addProductionIntoGrammar(
+                                            transProductions,
+                                            listOf(LexicalElement.NonTerminal(listOf(b, c)), LexicalElement.NonTerminal(q), LexicalElement.NonTerminal(listOf(a, x))),
+                                            listOf(LexicalElement.NonTerminal(p), LexicalElement.NonTerminal(listOf(b, c)), LexicalElement.NonTerminal(listOf(a, y)))
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // (a,C)q -> qaq   &&   q(a,C) -> qaq   &&   q -> epsilon   a: from sigma or epsilon; C: from gamma; q: final state
-            for (finalState in machine.finalStates) {
-                addProductionIntoGrammar(delProductions, finalState, listOf(epsilon))
+            // Recovery configurations
+            for (q in machine.finalStates) {
+                val qState = LexicalElement.NonTerminal(q)
+                // q -> epsilon, q из F
+                addProductionIntoGrammar(
+                        delProductions,
+                        listOf(qState),
+                        listOf(LexicalElement.Terminal(epsilon))
+                )
                 for (a in machine.sigma + epsilon) {
-                    for (C in machine.gamma) {
-                        addProductionIntoGrammar(delProductions, "($a,$C)$finalState", listOf(finalState, a, finalState))
-                        addProductionIntoGrammar(delProductions, "$finalState($a,$C)", listOf(finalState, a, finalState))
+                    for (c in machine.gamma) {
+                        // (a,C)q -> qaq, q из F, C из sigma, a из sigma или epsilon
+                        addProductionIntoGrammar(
+                                delProductions,
+                                listOf(LexicalElement.NonTerminal(listOf(a, c)), qState),
+                                listOf(qState, LexicalElement.Terminal(a), qState)
+                        )
+                        // q(a,C) -> qaq, q из F, C из sigma, a из sigma или epsilon
+                        addProductionIntoGrammar(
+                                delProductions,
+                                listOf(qState, LexicalElement.NonTerminal(listOf(a, c))),
+                                listOf(qState, LexicalElement.Terminal(a), qState)
+                        )
                     }
                 }
             }
             return ZeroTypeGrammar(machine.sigma, genProductions, transProductions, delProductions, machine)
-        }
-
-        private fun addProductionIntoGrammar(grammar: MutableMap<String, MutableList<List<String>>>, leftPart: String, rightPart: List<String>) {
-            val productions = grammar[leftPart]
-            if (productions == null) {
-                grammar[leftPart] = mutableListOf(rightPart)
-            } else {
-                productions.add(rightPart)
-            }
         }
     }
 }
