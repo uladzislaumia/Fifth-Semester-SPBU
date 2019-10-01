@@ -11,7 +11,9 @@ class OneTypeGrammar(
         super.printMainInfo()
     }
 
-    fun checkWordForReachability(word: String) {
+    fun checkNumberForDerivability(n: Int) {
+        val word = machine.leftMarker + "1".repeat(n) + machine.rightMarker
+
         // Initial configurations
         val output = mutableListOf<String>()
         val currentChain = mutableListOf<LexicalElement>()

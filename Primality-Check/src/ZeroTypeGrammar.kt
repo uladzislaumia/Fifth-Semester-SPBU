@@ -11,7 +11,9 @@ class ZeroTypeGrammar(
         super.printMainInfo()
     }
 
-    fun checkWordForReachability(word: String) {
+    fun checkNumberForDerivability(n: Int) {
+        val word = "1".repeat(n)
+
         // Initial configurations
         val output = mutableListOf<String>()
         val currentChain = mutableListOf<LexicalElement>()

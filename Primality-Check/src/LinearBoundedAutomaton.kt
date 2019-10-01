@@ -29,7 +29,7 @@ class LinearBoundedAutomaton(
 
     companion object {
 
-        fun createFromFile(fileName: String): LinearBoundedAutomaton {
+        fun getInstance(fileName: String): LinearBoundedAutomaton {
             return try {
                 val sigma = mutableSetOf<String>()
                 val gamma = mutableSetOf<String>()

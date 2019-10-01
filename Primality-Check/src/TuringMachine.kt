@@ -28,7 +28,7 @@ class TuringMachine(
 
     companion object {
 
-        fun createFromFile(fileName: String): TuringMachine {
+        fun getInstance(fileName: String): TuringMachine {
             return try {
                 val sigma = mutableSetOf<String>()
                 val gamma = mutableSetOf<String>()
